@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -64,7 +65,11 @@ func (m MovieModel) Insert(movie *Movie) error {
 	// pq.Array() is an adapter function takes our []string slice and converts it to a pq.StringArray type
 	// we can also use this with bool, byte, int32, int64, float32 and float64 array types
 	args := []any{movie.Title, movie.Year, movie.Runtime, pq.Array(movie.Genres)}
-	return m.DB.QueryRow(query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
+
+	// create a context with a 3 second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.ID, &movie.CreatedAt, &movie.Version)
 }
 
 // Get returns a specific record from the move DB
@@ -77,6 +82,7 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 	}
 
 	// Define the SQL query for retrieving the movie data
+	// pg_sleep(8) this can used to set the pg driver to sleep for 8 seconds
 	query := `
 		SELECT id, created_at, title, year, runtime, genres, version
 		FROM movies
@@ -85,8 +91,20 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 
 	var movie Movie
 
+	// Use the context.WithTimeout() function to craete a context.Context which carries a 3-second timeout deadline
+	// Note we are using the empty context.Background() as the parent context
+	// Timeout countdown begins from the moment the context is created. Any time spent creating the
+	// context and calling other functions will count towards the timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+
+	// we also need to cancel the timeout before the function returns
+	// this is necessary to release the associated resources, thereby preventing a memory leak
+	// without this resources won't be released untill 3 seconds or the parent context cancels
+	defer cancel()
+
 	// Note: we need to scan the target for genres column using the adapter method pq.Array()
-	err := m.DB.QueryRow(query, id).Scan(
+	// Update the QueryRow method to use the QueryRowContext method for handling timeouts
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&movie.ID,
 		&movie.CreatedAt,
 		&movie.Title,
@@ -116,7 +134,7 @@ func (m MovieModel) Update(movie *Movie) error {
 	query := `
 		UPDATE movies
 		SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
-		WHERE id = $5
+		WHERE id = $5 AND version = $6
 		RETURNING version
 	`
 
@@ -127,9 +145,27 @@ func (m MovieModel) Update(movie *Movie) error {
 		movie.Runtime,
 		pq.Array(movie.Genres),
 		movie.ID,
+		movie.Version,
 	}
 
-	return m.DB.QueryRow(query, args...).Scan(&movie.Version)
+	// Create a 3 second timeout context
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			{
+				return ErrEditConflict
+			}
+		default:
+			{
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Delete deletes a specific record from the movies table
@@ -139,8 +175,13 @@ func (m MovieModel) Delete(id int64) error {
 	}
 
 	query := `DELETE FROM movies where id = $1;`
+
+	// Create a timeout context
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
 	// Exec method returns an sql.Result object that contains information about how many rows were effected
-	result, err := m.DB.Exec(query, id)
+	result, err := m.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}

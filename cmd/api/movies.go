@@ -9,6 +9,14 @@ import (
 	"greenlight.usman.com/internal/validator"
 )
 
+// Data race condition = can occur when two or more goroutines try to use a piece of shared data
+// at the same time, but the result of the operation is dependent on the exact order that the scheduler
+// executes their instructions
+
+// Solution - Optimistic Locking
+// Optimistic locking is based on using version numbers, both records that are being updated have a version number
+// and during the update if the version number in the DB is greater than the version no for the update the update is rejected
+
 // Add a creteMovieHandler for the POST /v1./movies endpoint
 func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {
 	// Declare an annonymous struct to hold the information we expect in HTTP body
@@ -163,9 +171,16 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// pass the updated movie record to the new Update method
+	// we also add the check to check for any edit conflict errors
+	// if there are any edit conflicts we return the error
 	err = app.models.Movies.Update(movie)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
 		return
 	}
 
