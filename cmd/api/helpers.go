@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
+	"greenlight.usman.com/internal/validator"
 )
 
 type envelop map[string]any
@@ -121,4 +123,56 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 	}
 
 	return nil
+}
+
+// The readString() helper method returns a string value from the query string
+// or the provided default value if no matching key could be found
+func (app *application) readString(qs url.Values, key string, defaultValue string) string {
+	// Extract the value for a given key from the query string
+	// If no value is available will return empty string
+
+	s := qs.Get(key)
+
+	// if no key exists (or the value is empty)
+	// then return the default value
+	if s == "" {
+		return defaultValue
+	}
+
+	// Otherwise return the string
+	return s
+}
+
+// The readCSV() helper function reads a string value from the
+// query string and then splits it into a slice on the comma character
+// If no matching value is found it returns the default value
+func (app *application) readCSV(qs url.Values, key string, defaultValue []string) []string {
+	csv := qs.Get(key)
+
+	if csv == "" {
+		return defaultValue
+	}
+
+	// returns the slice splitted on the comma
+	return strings.Split(csv, ",")
+}
+
+// The readInt() helper reads a string value from the query string and tries to convert it into an integer
+// If no matching value could be found, it returns the default value
+// If the value couldn't be converted to an integer, then we record an error message in the provided validator instance
+func (app *application) readInt(qs url.Values, key string, defaultValue int, v *validator.Validator) int {
+	s := qs.Get(key)
+
+	if s == "" {
+		return defaultValue
+	}
+
+	// Try to convert the value into an int, if the conversion fails all the value to the validator instance and return the value
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		v.AddError(key, "must be an integer value")
+		return defaultValue
+	}
+
+	return i
 }

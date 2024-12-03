@@ -19,6 +19,7 @@ func (app *application) routes() http.Handler {
 	// using the HandlerFunc() method. Note that http.MethodGet and http.MethodPost are constants
 	// whcih equate to the strings GET and POST respectively
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/movies", app.listMovieHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/movies", app.createMovieHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/movies/:id", app.showMovieHandler)
 

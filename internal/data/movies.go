@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/lib/pq"
@@ -149,7 +150,7 @@ func (m MovieModel) Update(movie *Movie) error {
 	}
 
 	// Create a 3 second timeout context
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.Version)
@@ -177,7 +178,7 @@ func (m MovieModel) Delete(id int64) error {
 	query := `DELETE FROM movies where id = $1;`
 
 	// Create a timeout context
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	// Exec method returns an sql.Result object that contains information about how many rows were effected
@@ -197,4 +198,55 @@ func (m MovieModel) Delete(id int64) error {
 	}
 
 	return nil
+}
+
+// Add a GetAll function that returns all the movies based on the filter values provided
+func (m *MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
+	query := fmt.Sprintf(`
+        SELECT id, created_at, title, year, runtime, genres, version
+        FROM movies
+        WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '') 
+        AND (genres @> $2 OR $2 = '{}')     
+        ORDER BY %s %s, id ASC
+		LIMIT $3 OFFSET $4
+		`, filters.sortColumn(), filters.sortDirection())
+
+	// Create a local context to timeout after if the query does not respond in time
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	args := []any{title, pq.Array(genres), filters.limit(), filters.offset()}
+
+	rows, err := m.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	// Create a new movies array to hold all the movies
+	movies := []*Movie{}
+
+	// Loop over the query result and scan the values in
+	for rows.Next() {
+		var movie Movie
+		err := rows.Scan(&movie.ID, &movie.CreatedAt,
+			&movie.Title, &movie.Year, &movie.Runtime,
+			pq.Array(&movie.Genres), &movie.Version,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// If there is no error append this movie to the list
+		movies = append(movies, &movie)
+	}
+
+	// Check if the rows returned any error
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return movies, nil
 }
