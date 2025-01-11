@@ -30,5 +30,5 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodDelete, "/v1/movies/:id", app.deleteMovieHandler)
 
 	// We are going to wrap the router function with the recoverPanic middleware
-	return app.recoverPanic(router)
+	return app.recoverPanic(app.rateLimit(router))
 }

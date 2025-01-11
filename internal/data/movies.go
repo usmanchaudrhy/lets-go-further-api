@@ -201,9 +201,9 @@ func (m MovieModel) Delete(id int64) error {
 }
 
 // Add a GetAll function that returns all the movies based on the filter values provided
-func (m *MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
+func (m *MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, Metadata, error) {
 	query := fmt.Sprintf(`
-        SELECT id, created_at, title, year, runtime, genres, version
+        SELECT count(*) over(), id, created_at, title, year, runtime, genres, version
         FROM movies
         WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '') 
         AND (genres @> $2 OR $2 = '{}')     
@@ -219,24 +219,31 @@ func (m *MovieModel) GetAll(title string, genres []string, filters Filters) ([]*
 
 	rows, err := m.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 
 	defer rows.Close()
 
 	// Create a new movies array to hold all the movies
+	totalRecords := 0
 	movies := []*Movie{}
 
 	// Loop over the query result and scan the values in
 	for rows.Next() {
 		var movie Movie
-		err := rows.Scan(&movie.ID, &movie.CreatedAt,
-			&movie.Title, &movie.Year, &movie.Runtime,
-			pq.Array(&movie.Genres), &movie.Version,
+		err := rows.Scan(
+			&totalRecords,
+			&movie.ID,
+			&movie.CreatedAt,
+			&movie.Title,
+			&movie.Year,
+			&movie.Runtime,
+			pq.Array(&movie.Genres),
+			&movie.Version,
 		)
 
 		if err != nil {
-			return nil, err
+			return nil, Metadata{}, err
 		}
 
 		// If there is no error append this movie to the list
@@ -245,8 +252,11 @@ func (m *MovieModel) GetAll(title string, genres []string, filters Filters) ([]*
 
 	// Check if the rows returned any error
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 
-	return movies, nil
+	// we can now generate the metadata
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	return movies, metadata, nil
 }
