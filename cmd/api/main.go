@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -106,20 +105,26 @@ func main() {
 	// Declare an HTTP server which listens on the port provided in the config struct
 	// uses the servemux we creted above as the handler, has some sensible timeout settings
 	// and writes any log messages to the structured logger at Error level
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      app.routes(),
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 5 * time.Second,
-		ErrorLog:     slog.NewLogLogger(logger.Handler(), slog.LevelError),
+	// srv := &http.Server{
+	// 	Addr:         fmt.Sprintf(":%d", cfg.port),
+	// 	Handler:      app.routes(),
+	// 	IdleTimeout:  time.Minute,
+	// 	ReadTimeout:  5 * time.Second,
+	// 	WriteTimeout: 5 * time.Second,
+	// 	ErrorLog:     slog.NewLogLogger(logger.Handler(), slog.LevelError),
+	// }
+
+	// logger.Info("starting server", "addr", srv.Addr, "env", cfg.env)
+
+	// err = srv.ListenAndServe()
+	// logger.Error(err.Error())
+	// os.Exit(1)
+
+	err = app.serve()
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
 	}
-
-	logger.Info("starting server", "addr", srv.Addr, "env", cfg.env)
-
-	err = srv.ListenAndServe()
-	logger.Error(err.Error())
-	os.Exit(1)
 }
 
 func openDB(cfg config) (*sql.DB, error) {
