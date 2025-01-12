@@ -17,11 +17,13 @@ var (
 // We are going to keep adding to this like the UserModel and the PermissionsModel
 type Models struct {
 	Movies MovieModel
+	Users  UserModel
 }
 
 // New() is responsible for initializing all the models
 func NewModels(db *sql.DB) Models {
 	return Models{
 		Movies: MovieModel{DB: db},
+		Users:  UserModel{DB: db},
 	}
 }
