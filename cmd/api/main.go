@@ -58,7 +58,9 @@ func main() {
 	// The DSN flag is responsible for reading the config string to connect to the DB
 	// TODO: storing the dsn as an OS environment variable, the book stores it as GREENLIGHT_DB_DSN
 	// And then use os.Getenv("GREENLIGHT_DB_DSN") - Not doing now, will do in the future
-	flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://greenlight:pa55word@localhost/greenlight?sslmode=disable", "Postgres DSB DB")
+
+	// flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://greenlight:pa55word@localhost/greenlight?sslmode=disable", "Postgres DSB DB")
+	flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://postgres:pass123@localhost/greenlight?sslmode=disable", "PostgreSQL DSN")
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "Postgres max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "Postgres max idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "Postgres max idle timeout")
