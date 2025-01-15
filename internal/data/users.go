@@ -37,6 +37,11 @@ type password struct {
 // Set() method calculates the bcrypt hash of a plaintext password, and stores both the hash
 // and the plaintext version of the password in the struct
 func (p *password) Set(plaintextPassword string) error {
+
+	// the bcrypt.GenerateFromPassword() function generates a bcrypt hash of the password
+	// using a specific cost parameter. The higher the cost, the slower and more
+	// computationally expensive it is to generate the hash. We want to the cost to be
+	// prohibitively higher for attackers, but not so slow so that it harms the performance
 	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextPassword), 12)
 
 	if err != nil {
@@ -52,6 +57,11 @@ func (p *password) Set(plaintextPassword string) error {
 // Matches() method checks whether the provided plaintext password matches the
 // hashed password stored in the struct, returning true if it matches and false otherwise
 func (p *password) Matches(plaintextPassword string) (bool, error) {
+	// bcrypt.CompareHashAndPassword() functions works by re-hashing the provided
+	// password using the same salt and cost parameter that is in the hash string
+	// we are comparing against. The re-hashed value is checked against the original
+	// hash using the subtle.ConstantTimeCompare() function which performs a comparison
+	// in constant time. If they don't match, it will return a bcrypt.ErrMissmatchedHashAndPassword
 	err := bcrypt.CompareHashAndPassword(p.hash, []byte(plaintextPassword))
 	if err != nil {
 		switch {
