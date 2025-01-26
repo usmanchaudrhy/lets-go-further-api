@@ -176,3 +176,22 @@ func (app *application) readInt(qs url.Values, key string, defaultValue int, v *
 
 	return i
 }
+
+// background() helper runs the function in the background goroutine
+// handles all the errors and panic
+func (app *application) background(fn func()) {
+	// Launching a background goroutine
+	app.wg.Add(1)
+	go func() {
+
+		defer app.wg.Done()
+
+		defer func() {
+			if err := recover(); err != nil {
+				app.logger.Error(fmt.Sprintf("%v", err))
+			}
+		}()
+
+		fn()
+	}()
+}

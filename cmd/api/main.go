@@ -7,12 +7,13 @@ import (
 	"database/sql"
 	"flag"
 	"log/slog"
-	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
 	"greenlight.usman.com/internal/data"
+	"greenlight.usman.com/internal/mailer"
 )
 
 // Declare a string containing the application version number.
@@ -37,6 +38,13 @@ type config struct {
 		burst   int
 		enabled bool
 	}
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+		sender   string
+	}
 }
 
 // Define an application struct to hold the dependencies ffor our HTTP handlers, helpers
@@ -45,6 +53,8 @@ type application struct {
 	config config
 	logger *slog.Logger
 	models data.Models
+	mailer mailer.Mailer
+	wg     sync.WaitGroup
 }
 
 func main() {
@@ -59,8 +69,8 @@ func main() {
 	// TODO: storing the dsn as an OS environment variable, the book stores it as GREENLIGHT_DB_DSN
 	// And then use os.Getenv("GREENLIGHT_DB_DSN") - Not doing now, will do in the future
 
-	// flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://greenlight:pa55word@localhost/greenlight?sslmode=disable", "Postgres DSB DB")
-	flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://postgres:pass123@localhost/greenlight?sslmode=disable", "PostgreSQL DSN")
+	flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://greenlight:pa55word@localhost/greenlight?sslmode=disable", "Postgres DSB DB")
+	// flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://postgres:pass123@localhost/greenlight?sslmode=disable", "PostgreSQL DSN")
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "Postgres max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "Postgres max idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "Postgres max idle timeout")
@@ -70,6 +80,13 @@ func main() {
 	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+
+	// smtp mailer configurations
+	flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
+	flag.IntVar(&cfg.smtp.port, "smtp-port", 25, "SMTP port")
+	flag.StringVar(&cfg.smtp.username, "smtp-username", "be37ecd784c0cb", "SMTP username")
+	flag.StringVar(&cfg.smtp.password, "smtp-password", "11a5a7e1b269f4", "SMTP password")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Greenlight <no-reply@greenlight.alexedwards.net>", "SMTP sender")
 
 	flag.Parse()
 
@@ -96,13 +113,14 @@ func main() {
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
+		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
 	// Declare a new servemux and add a /v1/healthcheck route which dispatches requests to
 	// the healthcheckHandler method
 	// using the new routes function here
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/healthcheck", app.healthcheckHandler)
+	// mux := http.NewServeMux()
+	// mux.HandleFunc("/v1/healthcheck", app.healthcheckHandler)
 
 	// Declare an HTTP server which listens on the port provided in the config struct
 	// uses the servemux we creted above as the handler, has some sensible timeout settings

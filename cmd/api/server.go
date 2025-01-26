@@ -45,12 +45,20 @@ func (app *application) serve() error {
 
 		// create a context with a 30 second timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-
 		defer cancel()
 
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			shutdownError <- err
+		}
+
+		// log an error message saying that we are waiting for background goroutines to complete
+		app.logger.Info("completing background tasks", "addr", srv.Addr)
+		// Call the Wait() to block until our WaitGroup counter is zero
+		app.wg.Wait()
 		// call shutdown on the server passing the context
 		// shutdown will return nil if there was no error
-		shutdownError <- srv.Shutdown(ctx)
+		shutdownError <- nil
 
 		// Exit the application with a 0 status code
 		// os.Exit(0)

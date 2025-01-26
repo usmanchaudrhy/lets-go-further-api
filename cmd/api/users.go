@@ -62,9 +62,36 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	app.background(func() {
+		err = app.mailer.Send(user.Email, "user_welcome.tmpl", user)
+		if err != nil {
+			app.logger.Error(err.Error())
+		}
+	})
+
+	// Old process see the helper function above, it has been moved there now
+	// Launch a goroutine in the background to send the welcome email
+	// go func() {
+
+	// 	// run a deffered function which uses recover() to catch any panic, and log an error
+	// 	// message instead of terminating the applciation
+	// 	defer func() {
+	// 		if err := recover(); err != nil {
+	// 			app.logger.Error(fmt.Sprintf("%v", err))
+	// 		}
+	// 	}()
+
+	// 	// call the send method on the Mailer, passing in the user's email address,
+	// 	// name of the template file, and the User struct containing the new users data
+	// 	err = app.mailer.Send(user.Email, "user_welcome.tmpl", user)
+	// 	if err != nil {
+	// 		app.logger.Error(err.Error())
+	// 	}
+
+	// }()
 	// write a JSON response contaning the user data
-	// along with a 201 created status code
-	err = app.writeJSON(w, http.StatusCreated, envelop{
+	// along with a 202 Accepted Status code, showing that the request has been accepted for processing
+	err = app.writeJSON(w, http.StatusAccepted, envelop{
 		"user": user,
 	}, nil)
 	if err != nil {
